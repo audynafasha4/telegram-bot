@@ -4,11 +4,11 @@ const express = require('express');
 const token = process.env.TELEGRAM_TOKEN;
 
 if (!token) {
-    console.error('❌ TELEGRAM_TOKEN tidak ditemukan!');
+    console.error('❌ TELEGRAM_TOKEN tidak ditemukan di environment variables!');
     process.exit(1);
 }
 
-console.log('✅ Token OK, bot starting...');
+console.log('✅ Token ditemukan, bot siap start...');
 
 const bot = new TelegramBot(token, { polling: false });
 
@@ -189,7 +189,7 @@ Setiap hari 10.00 - 22.00`,
 
         await bot.answerCallbackQuery(query.id);
     } catch (err) {
-        console.error('Error callback:', err.message);
+        console.error('Error di callback_query:', err.message);
     }
 });
 
@@ -200,7 +200,6 @@ bot.on('message', (msg) => {
 
     if (!text || text.startsWith('/')) return;
 
-    // Contoh: kalau user ketik "Budi - 3" setelah lihat keranjang, anggap konfirmasi order
     if (text.includes('-')) {
         const [nama, jumlahStr] = text.split('-').map(t => t.trim());
         const jumlah = parseInt(jumlahStr);
@@ -228,7 +227,6 @@ bot.on('message', (msg) => {
 
         bot.sendMessage(chatId, orderText, { parse_mode: 'Markdown' });
 
-        // Kosongkan keranjang setelah order (atau bisa tunggu admin konfirmasi)
         carts.delete(chatId);
     }
 });
@@ -238,42 +236,50 @@ bot.onText(/\/keranjang/, (msg) => {
     showCart(msg.chat.id);
 });
 
-// WEBHOOK
+// WEBHOOK ENDPOINT
 app.post(webhookPath, (req, res) => {
-    console.log('Webhook menerima update');
+    console.log('Webhook menerima update dari Telegram');
     bot.processUpdate(req.body);
     res.sendStatus(200);
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8443;
 
 app.listen(PORT, async () => {
-    console.log(`🚀 Server jalan di port ${PORT}`);
+    console.log(`🚀 Server berjalan di port ${PORT}`);
 
-    const domain = process.env.RAILWAY_PUBLIC_DOMAIN;
-    if (domain) {
-        try {
-            await bot.deleteWebHook();
-            console.log('Webhook lama dihapus');
-        } catch (e) {
-            console.log('Tidak ada webhook lama:', e.message);
-        }
+    const rawDomain = process.env.RAILWAY_PUBLIC_DOMAIN;
+    if (!rawDomain) {
+        console.log('Domain Railway tidak ditemukan → mulai polling...');
+        bot.startPolling({ drop_pending_updates: true });
+        return;
+    }
 
-        let cleanDomain = domain.endsWith('/') ? domain.slice(0, -1) : domain;
-        const webhookUrl = `https://${cleanDomain}${webhookPath}`;
+    // Clean domain lebih ketat
+    let cleanDomain = rawDomain
+        .trim()
+        .replace(/\/$/, '')
+        .replace(/;+$/, '')
+        .replace(/\s+/g, '');
 
-        try {
-            await bot.setWebHook(webhookUrl, {
-                allowed_updates: ['message', 'callback_query']
-            });
-            console.log(`✅ Webhook set: ${webhookUrl}`);
-        } catch (err) {
-            console.error('❌ Gagal set webhook:', err.message);
-            console.log('Fallback ke polling...');
-            bot.startPolling({ drop_pending_updates: true });
-        }
-    } else {
-        console.log('Domain tidak ada → polling...');
+    const webhookUrl = `https://${cleanDomain}${webhookPath}`;
+
+    try {
+        await bot.deleteWebHook();
+        console.log('Webhook lama dihapus');
+    } catch (e) {
+        console.log('Tidak ada webhook lama atau gagal delete:', e.message);
+    }
+
+    try {
+        await bot.setWebHook(webhookUrl, {
+            allowed_updates: ['message', 'callback_query']
+        });
+        console.log(`✅ Webhook berhasil diset ke: ${webhookUrl}`);
+    } catch (err) {
+        console.error('❌ Gagal set webhook:', err.message || err);
+        console.log('Detail error lengkap:', JSON.stringify(err, null, 2));
+        console.log('Fallback: mulai polling...');
         bot.startPolling({ drop_pending_updates: true });
     }
 });
