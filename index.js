@@ -3,14 +3,21 @@ const express = require('express');
 
 const token = process.env.TELEGRAM_TOKEN;
 
-const bot = new TelegramBot(token);
+if (!token) {
+    console.error('❌ TELEGRAM_TOKEN tidak ditemukan di environment variables!');
+    process.exit(1); // Keluar kalau token kosong biar Railway restart & kamu notice
+}
+
+console.log('✅ Token ditemukan, bot siap start...');
+
+const bot = new TelegramBot(token, { polling: false }); // Mulai tanpa polling dulu
 
 const app = express();
 app.use(express.json());
 
 const webhookPath = '/webhook';
 
-// DATA MENU
+// DATA MENU (bisa ditambah foto atau deskripsi nanti)
 const menu = {
     nasgor: { nama: "Nasi Goreng Spesial", harga: 25000 },
     ayam: { nama: "Ayam Bakar Madu", harga: 30000 },
@@ -23,7 +30,8 @@ const menu = {
 // START MENU
 bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
-    bot.sendMessage(chatId, "Halo Kak 😊 Selamat datang di Rasa Nusantara 🍽️", {
+    bot.sendMessage(chatId, "Halo Kak 😊 Selamat datang di **Rasa Nusantara** 🍽️\nMakanan Nusantara asli & lezat!", {
+        parse_mode: 'Markdown',
         reply_markup: {
             inline_keyboard: [
                 [{ text: "🍽️ Lihat Menu", callback_data: "menu" }],
@@ -37,134 +45,155 @@ bot.onText(/\/start/, (msg) => {
 });
 
 // BUTTON HANDLER
-bot.on("callback_query", (query) => {
+bot.on('callback_query', async (query) => {
     const chatId = query.message.chat.id;
     const data = query.data;
 
-    // LIHAT MENU
-    if (data === "menu") {
-        bot.sendMessage(chatId,
-`🍽️ MENU KAMI:
+    try {
+        if (data === 'menu') {
+            await bot.sendMessage(chatId,
+`🍽️ **MENU KAMI**:
 
 🍛 Nasi Goreng Spesial - Rp25.000
 🍗 Ayam Bakar Madu - Rp30.000
 🍢 Sate Ayam - Rp28.000
 🍜 Mie Goreng Jawa - Rp24.000
 🥤 Es Teh Manis - Rp8.000
-🥑 Jus Alpukat - Rp15.000`
-        );
-    }
+🥑 Jus Alpukat - Rp15.000`,
+                { parse_mode: 'Markdown' }
+            );
+        }
 
-    // REKOMENDASI
-    if (data === "rekomendasi") {
-        bot.sendMessage(chatId,
-`⭐ Rekomendasi Kami:
+        if (data === 'rekomendasi') {
+            await bot.sendMessage(chatId,
+`⭐ **Rekomendasi Kami**:
 
 🍗 Ayam Bakar Madu - favorit pelanggan!
 🍛 Nasi Goreng Spesial - gurih & mengenyangkan
-🥑 Jus Alpukat - segar & creamy 😋`
-        );
-    }
+🥑 Jus Alpukat - segar & creamy 😋`,
+                { parse_mode: 'Markdown' }
+            );
+        }
 
-    // PESAN
-    if (data === "pesan") {
-        bot.sendMessage(chatId, "Silakan pilih menu yang ingin dipesan 😊", {
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: "🍛 Nasi Goreng", callback_data: "nasgor" }],
-                    [{ text: "🍗 Ayam Bakar", callback_data: "ayam" }],
-                    [{ text: "🍢 Sate Ayam", callback_data: "sate" }],
-                    [{ text: "🍜 Mie Goreng", callback_data: "mie" }],
-                    [{ text: "🥤 Es Teh", callback_data: "esteh" }],
-                    [{ text: "🥑 Jus Alpukat", callback_data: "jus" }]
-                ]
-            }
-        });
-    }
+        if (data === 'pesan') {
+            await bot.sendMessage(chatId, 'Silakan pilih menu yang ingin dipesan 😊', {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: "🍛 Nasi Goreng", callback_data: "nasgor" }],
+                        [{ text: "🍗 Ayam Bakar", callback_data: "ayam" }],
+                        [{ text: "🍢 Sate Ayam", callback_data: "sate" }],
+                        [{ text: "🍜 Mie Goreng", callback_data: "mie" }],
+                        [{ text: "🥤 Es Teh", callback_data: "esteh" }],
+                        [{ text: "🥑 Jus Alpukat", callback_data: "jus" }]
+                    ]
+                }
+            });
+        }
 
-    // PILIH MENU (ORDER)
-    if (menu[data]) {
-        const item = menu[data];
-
-        bot.sendMessage(chatId,
-`🧾 PESANAN ANDA
+        if (menu[data]) {
+            const item = menu[data];
+            await bot.sendMessage(chatId,
+`🧾 **PESANAN ANDA**
 
 Menu: ${item.nama}
-Harga: Rp${item.harga}
+Harga: Rp${item.harga.toLocaleString('id-ID')}
 
 Ketik format berikut untuk order:
 Nama - Jumlah
 
 Contoh:
-Budi - 2`
-        );
-    }
+Budi - 2`,
+                { parse_mode: 'Markdown' }
+            );
+        }
 
-    // INFO RESTO
-    if (data === "info") {
-        bot.sendMessage(chatId,
-`📍 Lokasi:
+        if (data === 'info') {
+            await bot.sendMessage(chatId,
+`📍 **Lokasi:**
 Jl. Sudirman No. 123, Jakarta
 
-🕒 Jam Operasional:
-Setiap hari 10.00 - 22.00`
-        );
-    }
+🕒 **Jam Operasional:**
+Setiap hari 10.00 - 22.00`,
+                { parse_mode: 'Markdown' }
+            );
+        }
 
-    // CUSTOMER SERVICE
-    if (data === "cs") {
-        bot.sendMessage(chatId, "📞 Hubungi Admin: @adminresto");
-    }
+        if (data === 'cs') {
+            await bot.sendMessage(chatId, '📞 Hubungi Admin: @adminresto');
+        }
 
-    bot.answerCallbackQuery(query.id);
+        await bot.answerCallbackQuery(query.id);
+    } catch (err) {
+        console.error('Error di callback_query:', err.message);
+    }
 });
 
 // HANDLE ORDER TEXT
-bot.on("message", (msg) => {
+bot.on('message', (msg) => {
     const chatId = msg.chat.id;
-    const text = msg.text;
+    const text = msg.text?.trim();
 
-    // Hindari bentrok dengan /start
-    if (text.startsWith("/")) return;
+    if (!text || text.startsWith('/')) return;
 
-    // Format: Nama - Jumlah
-    if (text.includes("-")) {
-        const [nama, jumlah] = text.split("-").map(t => t.trim());
+    if (text.includes('-')) {
+        const [nama, jumlahStr] = text.split('-').map(t => t.trim());
+        const jumlah = parseInt(jumlahStr);
 
-        if (!nama || !jumlah || isNaN(jumlah)) {
-            return bot.sendMessage(chatId, "Format salah ya Kak 😅\nContoh: Budi - 2");
+        if (!nama || isNaN(jumlah) || jumlah <= 0) {
+            return bot.sendMessage(chatId, 'Format salah ya Kak 😅\nContoh: Budi - 2');
         }
 
         bot.sendMessage(chatId,
-`✅ PESANAN DITERIMA
+`✅ **PESANAN DITERIMA**
 
 Nama: ${nama}
 Jumlah: ${jumlah}
 
 Pesanan sedang diproses ya Kak 🍽️
-Terima kasih 🙏`
+Terima kasih banyak 🙏`,
+            { parse_mode: 'Markdown' }
         );
     }
 });
 
 // WEBHOOK ENDPOINT
 app.post(webhookPath, (req, res) => {
+    console.log('Webhook menerima update dari Telegram');
     bot.processUpdate(req.body);
     res.sendStatus(200);
 });
 
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, async () => {
-    console.log(`Server jalan di port ${PORT}`);
+    console.log(`🚀 Server berjalan di port ${PORT}`);
 
     const domain = process.env.RAILWAY_PUBLIC_DOMAIN;
     if (domain) {
-        const webhookUrl = `https://${domain}${webhookPath}`;
+        // Bersihkan webhook lama dulu
         try {
-            await bot.setWebHook(webhookUrl);
-            console.log(`Webhook set: ${webhookUrl}`);
-        } catch (err) {
-            console.error('Gagal set webhook:', err.message);
+            await bot.deleteWebHook();
+            console.log('Webhook lama dihapus');
+        } catch (e) {
+            console.log('Tidak ada webhook lama atau gagal delete:', e.message);
         }
+
+        // Pastikan URL bersih (tanpa trailing slash ekstra)
+        let cleanDomain = domain.endsWith('/') ? domain.slice(0, -1) : domain;
+        const webhookUrl = `https://${cleanDomain}${webhookPath}`;
+
+        try {
+            await bot.setWebHook(webhookUrl, {
+                allowed_updates: ['message', 'callback_query'] // Lebih efisien
+            });
+            console.log(`✅ Webhook berhasil diset ke: ${webhookUrl}`);
+        } catch (err) {
+            console.error('❌ Gagal set webhook:', err.message);
+            console.log('Fallback: mulai polling mode...');
+            bot.startPolling({ drop_pending_updates: true });
+        }
+    } else {
+        console.log('Domain Railway tidak ditemukan → mulai polling...');
+        bot.startPolling({ drop_pending_updates: true });
     }
 });
